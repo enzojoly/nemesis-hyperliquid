@@ -1,11 +1,18 @@
-import { port, serveHealth, staticAssets } from "./serve.shared"
-import swTemplate from "./sw.template.js" with { type: "text" }
+import { port, serveHealth, serveServiceWorker, staticAssets } from "./serve.common"
 
 import indexHtml from "./index.html" with { type: "file" }
 import styleCss from "./style.css" with { type: "file" }
 import appJs from "./dist/app.js" with { type: "file" }
 
-const BUILD_VERSION = Date.now()
+// ---------------------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------------------
+
+const CACHE_VERSION = process.env.CACHE_VERSION || `prod-${Date.now()}`
+
+// ---------------------------------------------------------------------------
+// Prod assets — core files + shared static assets
+// ---------------------------------------------------------------------------
 
 const prodAssets = new Map<string, { filePath: string; contentType: string }>([
   ["/", { filePath: indexHtml, contentType: "text/html" }],
@@ -15,27 +22,34 @@ const prodAssets = new Map<string, { filePath: string; contentType: string }>([
   ...staticAssets,
 ])
 
-async function fetch(request: Request): Promise<Response> {
-  const path = new URL(request.url).pathname
+// ---------------------------------------------------------------------------
+// Server
+// ---------------------------------------------------------------------------
 
-  if (path === "/sw.js") {
-    const sw = swTemplate.replace(/__CACHE_VERSION__/g, String(BUILD_VERSION))
-    return new Response(sw, {
-      headers: { "Content-Type": "application/javascript", "Cache-Control": "no-cache" },
-    })
-  }
+console.log(`\nNEMESIS [${CACHE_VERSION}]\nhttp://localhost:${port}\n`)
 
-  const asset = prodAssets.get(path)
-  if (asset) {
-    return new Response(Bun.file(asset.filePath), {
-      headers: { "Content-Type": asset.contentType },
-    })
-  }
+Bun.serve({
+  port,
 
-  if (path === "/health") return serveHealth("production")
+  async fetch(req: Request): Promise<Response> {
+    const url = new URL(req.url)
+    const path = url.pathname
 
-  return new Response("404 Not Found", { status: 404 })
-}
+    if (path === "/health") return serveHealth("production")
+    if (path === "/sw.js") return serveServiceWorker("persistent", CACHE_VERSION)
 
-Bun.serve({ port, fetch, idleTimeout: 0 })
-console.log(`\nNEMESIS [${BUILD_VERSION}]\nhttp://localhost:${port}\n`)
+    const asset = prodAssets.get(path)
+    if (asset) {
+      return new Response(Bun.file(asset.filePath), {
+        headers: {
+          "Content-Type": asset.contentType,
+          "Cache-Control": path.endsWith(".html") || path === "/"
+            ? "no-cache"
+            : "public, max-age=31536000, immutable",
+        },
+      })
+    }
+
+    return new Response("404 Not Found", { status: 404 })
+  },
+})

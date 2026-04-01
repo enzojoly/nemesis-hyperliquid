@@ -1,197 +1,229 @@
 import { watch, watchFile } from "fs"
-import { port, getContentType, serveHealth, staticAssets } from "./serve.shared"
-import swTemplate from "./sw.template.js" with { type: "text" }
+import { port, getContentType, serveHealth, serveServiceWorker, serveStaticFile, staticAssets, type CacheMode } from "./serve.common"
 
 const DEBUG = process.env.DEBUG === "1"
-const DEV_BUILD_VERSION = `dev-${Date.now()}`
 
-function log(...args: unknown[]) {
-  if (DEBUG) console.log(...args)
-}
+const CACHE_MODE = (process.env.CACHE_MODE || "fresh") as CacheMode
+const BUILD_VERSION = CACHE_MODE === "fresh"
+  ? `dev-${Date.now()}`
+  : "dev-persistent"
 
-const hmrClientScript = `
-<script>
-(function() {
-  const DEBUG = ${DEBUG};
-  const sse = new EventSource("/__hmr");
-  sse.onmessage = function(event) {
-    try {
-      const msg = JSON.parse(event.data);
-      if (msg.type === "css") {
-        document.querySelectorAll('link[rel="stylesheet"]').forEach(function(link) {
-          const url = new URL(link.href);
-          url.searchParams.set("t", Date.now().toString());
-          link.href = url.toString();
-        });
-        console.log("[HMR] CSS updated:", msg.file);
-      }
-    } catch (err) {}
-  };
-})();
-</script>
-`
+// ---------------------------------------------------------------------------
+// HMR — Server-Sent Events for CSS hot reload
+// ---------------------------------------------------------------------------
 
-interface HMRClient {
-  id: number
-  controller: ReadableStreamDefaultController<Uint8Array>
+interface HmrClient {
+  controller: ReadableStreamDefaultController
   closed: boolean
-  connectedAt: number
 }
 
-let clientIdCounter = 0
-const hmrClients = new Set<HMRClient>()
+const hmrClients = new Set<HmrClient>()
 
-function createHMRStream(): Response {
-  let client: HMRClient
-  const clientId = ++clientIdCounter
-
-  const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
-      client = { id: clientId, controller, closed: false, connectedAt: Date.now() }
-      hmrClients.add(client)
-      try {
-        const ping = `data: {"type":"ping","clientId":${clientId}}\n\n`
-        controller.enqueue(new TextEncoder().encode(ping))
-      } catch {}
-    },
-    cancel() {
-      client.closed = true
-      hmrClients.delete(client)
-    },
-  })
-
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      "Connection": "keep-alive",
-    },
-  })
-}
-
-function broadcast(data: { type: "css"; file: string }): void {
+function broadcast(data: Record<string, unknown>): void {
   const message = `data: ${JSON.stringify(data)}\n\n`
   const encoded = new TextEncoder().encode(message)
 
-  hmrClients.forEach((client) => {
-    if (!client.closed) {
-      try {
-        client.controller.enqueue(encoded)
-      } catch {
-        client.closed = true
-        hmrClients.delete(client)
-      }
+  for (const client of hmrClients) {
+    if (client.closed) { hmrClients.delete(client); continue }
+    try {
+      client.controller.enqueue(encoded)
+    } catch {
+      client.closed = true
+      hmrClients.delete(client)
     }
-  })
+  }
 }
+
+// ---------------------------------------------------------------------------
+// CSS file watching — poll-based for reliability
+// ---------------------------------------------------------------------------
 
 const DEBOUNCE_MS = 50
 const POLL_INTERVAL = 100
 const debounceTimers = new Map<string, Timer>()
 const watchedFiles = new Set<string>()
 
-function watchCssFilePolling(filename: string) {
+function watchCssFile(filename: string): void {
   if (watchedFiles.has(filename)) return
   watchedFiles.add(filename)
-  
+
   watchFile(filename, { interval: POLL_INTERVAL }, (curr, prev) => {
     if (curr.mtimeMs !== prev.mtimeMs) {
-      triggerCssReload(filename)
+      const existing = debounceTimers.get(filename)
+      if (existing) clearTimeout(existing)
+
+      debounceTimers.set(filename, setTimeout(() => {
+        debounceTimers.delete(filename)
+        console.log(`[HMR] CSS updated: ${filename}`)
+        broadcast({ type: "css", file: filename })
+      }, DEBOUNCE_MS))
     }
   })
 }
 
-function triggerCssReload(filename: string) {
-  const existingTimer = debounceTimers.get(filename)
-  if (existingTimer) clearTimeout(existingTimer)
-  
-  const timer = setTimeout(() => {
-    debounceTimers.delete(filename)
-    console.log(`[HMR] CSS updated: ${filename}`)
-    broadcast({ type: "css", file: filename })
-  }, DEBOUNCE_MS)
-  
-  debounceTimers.set(filename, timer)
-}
+watchCssFile("style.css")
 
-watchCssFilePolling("style.css")
-
-watch(".", { recursive: true }, (eventType, filename) => {
+watch(".", { recursive: true }, (_event, filename) => {
   if (!filename) return
   if (filename.includes("node_modules") || filename.includes("dist")) return
-  
+
   if (filename.endsWith(".css")) {
-    watchCssFilePolling(filename)
-    triggerCssReload(filename)
+    watchCssFile(filename)
+
+    const existing = debounceTimers.get(filename)
+    if (existing) clearTimeout(existing)
+    debounceTimers.set(filename, setTimeout(() => {
+      debounceTimers.delete(filename)
+      console.log(`[HMR] CSS updated: ${filename}`)
+      broadcast({ type: "css", file: filename })
+    }, DEBOUNCE_MS))
   }
 })
 
-async function bundleTypeScript(entrypoint: string): Promise<Response> {
+// ---------------------------------------------------------------------------
+// On-the-fly TypeScript bundling
+// ---------------------------------------------------------------------------
+
+let cachedBundle: string | null = null
+
+async function bundleApp(): Promise<string> {
   const result = await Bun.build({
-    entrypoints: [entrypoint],
-    minify: false,
+    entrypoints: ["./index.ts"],
     sourcemap: "inline",
+    target: "browser",
   })
 
   if (!result.success) {
-    console.error("[BUILD] Failed:", result.logs)
-    return new Response("// Build failed\n" + result.logs.join("\n"), {
-      status: 500,
-      headers: { "Content-Type": "text/javascript" },
-    })
+    const errors = result.logs.map((l) => String(l)).join("\n")
+    console.error("[BUILD]", errors)
+    return `document.title="BUILD ERROR";console.error(${JSON.stringify(errors)})`
   }
 
-  return new Response(result.outputs[0], {
-    headers: { "Content-Type": "text/javascript" },
+  cachedBundle = await result.outputs[0].text()
+  return cachedBundle
+}
+
+// Invalidate bundle when TS files change
+try {
+  watch("./ts", { recursive: true }, (_event, filename) => {
+    if (filename && filename.endsWith(".ts")) {
+      cachedBundle = null
+      if (DEBUG) console.log(`[BUILD] Invalidated: ts/${filename}`)
+    }
   })
-}
+} catch { /* ts dir may not exist yet */ }
 
-async function serveHtmlWithHMR(filePath: string): Promise<Response> {
-  const file = Bun.file(filePath)
-  if (!(await file.exists())) return new Response("404 Not Found", { status: 404 })
-
-  let content = await file.text()
-  content = content.replace("</body>", `${hmrClientScript}</body>`)
-  
-  return new Response(content, { headers: { "Content-Type": "text/html" } })
-}
-
-async function handleRequest(request: Request): Promise<Response> {
-  const url = new URL(request.url)
-  const path = url.pathname
-
-  if (path === "/__hmr") return createHMRStream()
-  
-  if (path === "/sw.js") {
-    const sw = swTemplate.replace(/__CACHE_VERSION__/g, DEV_BUILD_VERSION)
-    return new Response(sw, {
-      headers: { "Content-Type": "application/javascript", "Cache-Control": "no-cache" },
-    })
+watch(".", { recursive: false }, (_event, filename) => {
+  if (filename === "index.ts") {
+    cachedBundle = null
+    if (DEBUG) console.log("[BUILD] Invalidated: index.ts")
   }
-  
-  if (path === "/app.js") return await bundleTypeScript("./app.ts")
-  if (path === "/health") return serveHealth("development")
+})
 
-  const staticAsset = staticAssets.get(path)
-  if (staticAsset) {
-    return new Response(Bun.file(staticAsset.filePath), {
-      headers: { "Content-Type": staticAsset.contentType },
-    })
+// ---------------------------------------------------------------------------
+// HMR client script — injected into HTML responses
+// ---------------------------------------------------------------------------
+
+const HMR_SCRIPT = `
+<script>
+(function() {
+  function connectHMR() {
+    var es = new EventSource('/__hmr')
+    es.onmessage = function(e) {
+      var data = JSON.parse(e.data)
+      if (data.type === 'css') {
+        var links = document.querySelectorAll('link[rel="stylesheet"]')
+        links.forEach(function(link) {
+          var href = link.getAttribute('href').split('?')[0]
+          link.setAttribute('href', href + '?t=' + Date.now())
+        })
+      }
+    }
+    es.onerror = function() {
+      es.close()
+      setTimeout(connectHMR, 2000)
+    }
   }
+  connectHMR()
+})()
+</script>
+`
 
-  const filePath = "." + (path === "/" ? "/index.html" : path)
-  const file = Bun.file(filePath)
+// ---------------------------------------------------------------------------
+// Server
+// ---------------------------------------------------------------------------
 
-  if (!(await file.exists())) return new Response("404 Not Found", { status: 404 })
-  if (filePath.endsWith(".html")) return await serveHtmlWithHMR(filePath)
-  if (filePath.endsWith(".css")) {
-    return new Response(file, {
-      headers: { "Content-Type": "text/css", "Cache-Control": "no-cache, no-store, must-revalidate" },
-    })
-  }
-
-  return new Response(file, { headers: { "Content-Type": getContentType(filePath) } })
-}
-
-Bun.serve({ port, fetch: handleRequest, idleTimeout: 0 })
 console.log(`\nNEMESIS [DEV]${DEBUG ? " - DEBUG" : ""}\nhttp://localhost:${port}\n`)
+
+Bun.serve({
+  port,
+  idleTimeout: 0,
+
+  async fetch(req: Request): Promise<Response> {
+    const url = new URL(req.url)
+    const path = url.pathname
+
+    if (DEBUG) console.log(`${req.method} ${path}`)
+
+    // HMR SSE endpoint
+    if (path === "/__hmr") {
+      const stream = new ReadableStream({
+        start(controller) {
+          const client: HmrClient = { controller, closed: false }
+          hmrClients.add(client)
+          req.signal.addEventListener("abort", () => {
+            client.closed = true
+            hmrClients.delete(client)
+          })
+        },
+      })
+
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-store",
+          "Connection": "keep-alive",
+        },
+      })
+    }
+
+    // Health
+    if (path === "/health") return serveHealth("development")
+
+    // Service worker
+    if (path === "/sw.js") return serveServiceWorker(CACHE_MODE, BUILD_VERSION)
+
+    // Bundle on the fly
+    if (path === "/app.js") {
+      const js = cachedBundle ?? await bundleApp()
+      return new Response(js, {
+        headers: { "Content-Type": "application/javascript", "Cache-Control": "no-store" },
+      })
+    }
+
+    // Embedded static assets (images, fonts, CSS for prod — serve from disk in dev)
+    const staticAsset = staticAssets.get(path)
+    if (staticAsset) {
+      return new Response(Bun.file(staticAsset.filePath), {
+        headers: { "Content-Type": staticAsset.contentType, "Cache-Control": "no-store" },
+      })
+    }
+
+    // index.html — inject HMR script
+    if (path === "/" || path === "/index.html") {
+      const file = Bun.file("./index.html")
+      let html = await file.text()
+      html = html.replace("</body>", `${HMR_SCRIPT}</body>`)
+      return new Response(html, {
+        headers: { "Content-Type": "text/html", "Cache-Control": "no-store" },
+      })
+    }
+
+    // Static files (no-store in dev — soft refresh always fresh)
+    const staticResponse = await serveStaticFile(path, true)
+    if (staticResponse) return staticResponse
+
+    // SPA fallback
+    return new Response("404 Not Found", { status: 404 })
+  },
+})

@@ -36,7 +36,7 @@
             START=$(date +%s.%N)
 
             mkdir -p dist
-            ${pkgs.bun}/bin/bun build ./app.ts --outdir=dist --minify --target=browser 2>/dev/null
+            ${pkgs.bun}/bin/bun build ./index.ts --outfile dist/app.js --minify --target=browser 2>/dev/null
             ${pkgs.bun}/bin/bun build ./serve.prod.ts --compile --minify --target=bun-linux-x64 --outfile=nemesis-app 2>/dev/null
             ${pkgs.patchelf}/bin/patchelf --set-interpreter ${standardInterpreter} nemesis-app
 
@@ -65,7 +65,7 @@
             BUILD_START=$(date +%s.%N)
 
             mkdir -p dist
-            ${pkgs.bun}/bin/bun build ./app.ts --outdir=dist --minify --target=browser 2>/dev/null
+            ${pkgs.bun}/bin/bun build ./index.ts --outfile dist/app.js --minify --target=browser 2>/dev/null
             ${pkgs.bun}/bin/bun build ./serve.prod.ts --compile --minify --target=bun-linux-x64 --outfile=nemesis-app 2>/dev/null
             ${pkgs.patchelf}/bin/patchelf --set-interpreter ${standardInterpreter} nemesis-app
 

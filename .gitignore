@@ -1,27 +1,7 @@
-# Build outputs
+node_modules/
 dist/
 nemesis-app
-
-# Dependencies
-node_modules/
-
-# Nix
-.direnv/
-result
-
-# Editor
-.idea/
-.vscode/
-*.swp
-*~
-
-# Logs
-*.log
-
-# Environment
 .env
-.env.local
 
-# OS
-.DS_Store
-Thumbs.db
+flake.lock
+tree
