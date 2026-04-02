@@ -36,7 +36,7 @@ Bun.serve({
     const path = url.pathname
 
     if (path === "/health") return serveHealth("production")
-    if (path === "/sw.js") return serveServiceWorker("persistent", CACHE_VERSION)
+    if (path === "/sw.js") return serveServiceWorker(CACHE_VERSION)
 
     const asset = prodAssets.get(path)
     if (asset) {

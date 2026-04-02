@@ -1,12 +1,8 @@
 import { watch, watchFile } from "fs"
-import { port, getContentType, serveHealth, serveServiceWorker, serveStaticFile, staticAssets, type CacheMode } from "./serve.common"
+import { port, serveHealth, serveServiceWorker, serveStaticFile, staticAssets } from "./serve.common"
 
 const DEBUG = process.env.DEBUG === "1"
-
-const CACHE_MODE = (process.env.CACHE_MODE || "fresh") as CacheMode
-const BUILD_VERSION = CACHE_MODE === "fresh"
-  ? `dev-${Date.now()}`
-  : "dev-persistent"
+const BUILD_VERSION = `dev-${Date.now()}`
 
 // ---------------------------------------------------------------------------
 // HMR — Server-Sent Events for CSS hot reload
@@ -153,7 +149,7 @@ const HMR_SCRIPT = `
 // Server
 // ---------------------------------------------------------------------------
 
-console.log(`\nNEMESIS [DEV]${DEBUG ? " - DEBUG" : ""}\nhttp://localhost:${port}\n`)
+console.log(`\nNEMESIS [DEV] ${BUILD_VERSION}${DEBUG ? " - DEBUG" : ""}\nhttp://localhost:${port}\n`)
 
 Bun.serve({
   port,
@@ -191,7 +187,7 @@ Bun.serve({
     if (path === "/health") return serveHealth("development")
 
     // Service worker
-    if (path === "/sw.js") return serveServiceWorker(CACHE_MODE, BUILD_VERSION)
+    if (path === "/sw.js") return serveServiceWorker(BUILD_VERSION)
 
     // Bundle on the fly
     if (path === "/app.js") {
@@ -201,7 +197,7 @@ Bun.serve({
       })
     }
 
-    // Embedded static assets (images, fonts, CSS for prod — serve from disk in dev)
+    // Embedded static assets (images, fonts, CSS)
     const staticAsset = staticAssets.get(path)
     if (staticAsset) {
       return new Response(Bun.file(staticAsset.filePath), {
@@ -219,11 +215,11 @@ Bun.serve({
       })
     }
 
-    // Static files (no-store in dev — soft refresh always fresh)
+    // Static files
     const staticResponse = await serveStaticFile(path)
     if (staticResponse) return staticResponse
 
-    // SPA fallback
+    // 404
     return new Response("404 Not Found", { status: 404 })
   },
 })

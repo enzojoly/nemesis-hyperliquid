@@ -34,9 +34,6 @@ import cssResponsive from "./css/responsive.css" with { type: "file" }
 
 export const port = parseInt(process.env.PORT || "3000", 10)
 
-export const CACHE_MODES = ["fresh", "persistent", "disabled"] as const
-export type CacheMode = typeof CACHE_MODES[number]
-
 // ---------------------------------------------------------------------------
 // MIME types
 // ---------------------------------------------------------------------------
@@ -136,21 +133,10 @@ function formatUptime(ms: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Service worker
+// Service worker — stamps version into template
 // ---------------------------------------------------------------------------
 
-export function serveServiceWorker(cacheMode: CacheMode, version: string): Response {
-  if (cacheMode === "disabled") {
-    const noop = `self.addEventListener('install', () => self.skipWaiting())
-self.addEventListener('activate', () => {
-  self.clients.matchAll().then(clients => clients.forEach(c => c.postMessage(JSON.stringify({ type: 'connection', healthy: true }))))
-  self.registration.unregister()
-})`
-    return new Response(noop, {
-      headers: { "Content-Type": "application/javascript", "Cache-Control": "no-store" },
-    })
-  }
-
+export function serveServiceWorker(version: string): Response {
   const sw = swTemplate.replace(/__CACHE_VERSION__/g, version)
   return new Response(sw, {
     headers: { "Content-Type": "application/javascript", "Cache-Control": "no-store" },
@@ -161,7 +147,7 @@ self.addEventListener('activate', () => {
 // Static file serving
 // ---------------------------------------------------------------------------
 
-export async function serveStaticFile(pathname: string, noCache = false): Promise<Response | null> {
+export async function serveStaticFile(pathname: string): Promise<Response | null> {
   let filePath = pathname === "/" ? "/index.html" : pathname
 
   const file = Bun.file(`.${filePath}`)
@@ -170,9 +156,6 @@ export async function serveStaticFile(pathname: string, noCache = false): Promis
   return new Response(file, {
     headers: {
       "Content-Type": getContentType(filePath),
-      "Cache-Control": noCache
-        ? "no-store"
-        : filePath.endsWith(".html") ? "no-cache" : "public, max-age=31536000, immutable",
     },
   })
 }
@@ -184,6 +167,6 @@ export async function serveStaticFile(pathname: string, noCache = false): Promis
 export async function serveFallback(): Promise<Response> {
   const file = Bun.file("./index.html")
   return new Response(file, {
-    headers: { "Content-Type": "text/html", "Cache-Control": "no-cache" },
+    headers: { "Content-Type": "text/html" },
   })
 }
