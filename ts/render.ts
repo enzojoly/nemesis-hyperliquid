@@ -1,7 +1,7 @@
 import morphdom from 'morphdom'
 import { state } from './state'
 import { ICONS } from './icons'
-import { formatTime, formatUSD, formatCompact, truncAddr, getMarket, getTotalPnl } from './utils'
+import { formatTime, formatUSD, formatCompact, getMarket } from './utils'
 import { connectionMonitor } from './connection'
 
 export function render() {
@@ -53,9 +53,6 @@ function renderTitleScreen(): string {
 }
 
 function renderMainInterface(): string {
-  const pnl = getTotalPnl()
-  const isOffMode = state.avatarMode === 'off'
-
   return `
     <div class="scene" id="main-scene">
       <div class="bg-layer"></div>
@@ -67,42 +64,33 @@ function renderMainInterface(): string {
           <div class="logo">
             <div class="logo-mark">${ICONS.logo}</div>
             <span class="logo-text">NEMESIS</span>
-            <span class="logo-tagline">Every trader needs a Nemesis.</span>
           </div>
           <nav class="nav">
-            <button class="nav-btn ${state.nav === 'trade' ? 'active' : ''}" data-nav="trade">Trade</button>
-            <button class="nav-btn ${state.nav === 'feed' ? 'active' : ''}" data-nav="feed">Feed</button>
-            <button class="nav-btn ${state.nav === 'leaderboard' ? 'active' : ''}" data-nav="leaderboard">Leaderboard</button>
-            <button class="nav-btn ${state.nav === 'portfolio' ? 'active' : ''}" data-nav="portfolio">Portfolio</button>
+            <button class="nav-btn ${state.nav === 'archive' ? 'active' : ''}" data-nav="archive">Archive</button>
+            <button class="nav-btn ${state.nav === 'shop' ? 'active' : ''}" data-nav="shop">Shop All</button>
+            <button class="nav-btn ${state.nav === 'returns' ? 'active' : ''}" data-nav="returns">Returns & Shipping</button>
           </nav>
           <div class="header-spacer"></div>
-          <div class="header-stats">
-            <div class="stat"><div class="stat-label">24h Volume</div><div class="stat-value">$2.84M</div></div>
-            <div class="stat"><div class="stat-label">Your P&L</div><div class="stat-value ${pnl >= 0 ? 'up' : 'down'}">${pnl >= 0 ? '+' : ''}${formatUSD(pnl)}</div></div>
-          </div>
           <div class="mode-toggle">
             <button class="mode-btn ${state.avatarMode === 'full' ? 'active' : ''}" data-mode="full">Full</button>
             <button class="mode-btn ${state.avatarMode === 'small' ? 'active' : ''}" data-mode="small">Small</button>
-            <button class="mode-btn ${state.avatarMode === 'off' ? 'active' : ''}" data-mode="off">Off</button>
           </div>
-          <button class="wallet-btn ${state.connected ? 'connected' : ''}" id="wallet-btn">${state.connected ? truncAddr(state.address) : 'Connect Wallet'}</button>
         </header>
         <div class="main-content">
-          ${state.nav === 'trade' ? renderTradeContent() : ''}
-          ${state.nav === 'feed' ? renderFeedPage() : ''}
-          ${state.nav === 'leaderboard' ? renderLeaderboardPage() : ''}
-          ${state.nav === 'portfolio' ? renderPortfolioPage() : ''}
+          ${state.nav === 'shop' ? renderTradeContent() : ''}
+          ${state.nav === 'archive' ? renderArchivePage() : ''}
+          ${state.nav === 'returns' ? renderReturnsPage() : ''}
         </div>
       </div>
       ${renderConnectionIndicator()}
       ${renderDiagnosticPanel()}
-      <div class="dialogue-container ${isOffMode ? 'off-mode' : ''}">
+      <div class="dialogue-container avatar-${state.avatarMode}">
         <div class="dialogue-box signal-${state.dialogueSignal}" id="dialogue-box">
           <div class="dialogue-name visible" id="dialogue-name">NEMESIS</div>
           <div class="dialogue-text" id="dialogue-text">${state.dialogueSignal === 'connected' ? state.currentDialogue : ''}</div>
           <div class="dialogue-continue">▼</div>
         </div>
-        <div class="dialogue-portrait ${state.avatarMode === 'small' || isOffMode ? 'visible' : ''}" id="dialogue-portrait">
+        <div class="dialogue-portrait ${state.avatarMode === 'small' ? 'visible' : ''}" id="dialogue-portrait">
           <img id="portrait-img" src="nemesis-chan/${state.currentEmotion}.png" alt="">
         </div>
         <div class="dialogue-orbital">
@@ -205,21 +193,12 @@ function getOrderButtonText(): string {
   }
 }
 
-function renderFeedPage(): string {
-  return `<div class="full-page"><h1 class="page-title">:: Activity Feed ::</h1>${state.feed.map(f => `<div class="feed-item"><div class="feed-user">${f.user}</div><div class="feed-text">${f.text}</div><div class="feed-time">${f.time}</div></div>`).join('')}</div>`
+function renderArchivePage(): string {
+  return `<div class="full-page"><h1 class="page-title">:: Archive ::</h1><div class="empty">Archive collection coming soon.</div></div>`
 }
 
-function renderLeaderboardPage(): string {
-  return `<div class="full-page"><h1 class="page-title">:: Leaderboard ::</h1>${state.leaderboard.map(l => `<div class="lb-item"><span class="lb-rank ${l.rank === 1 ? 'gold' : l.rank === 2 ? 'silver' : l.rank === 3 ? 'bronze' : ''}">#${l.rank}</span><div><div class="lb-name">${l.name}</div><div class="lb-addr">${l.address}</div></div><span class="lb-pnl">+${formatCompact(l.pnl)}</span></div>`).join('')}</div>`
-}
-
-function renderPortfolioPage(): string {
-  const totalPnl = getTotalPnl()
-  const totalValue = state.positions.filter(p => p.status === 'open').reduce((sum, p) => sum + p.size, 0)
-  const wins = state.history.filter(h => h.pnl > 0).length
-  const total = state.history.length
-  const winRate = total > 0 ? (wins / total * 100).toFixed(1) : '0.0'
-  return `<div class="full-page"><h1 class="page-title">:: Portfolio ::</h1><div class="portfolio-stats"><div class="portfolio-stat"><div class="portfolio-stat-label">Balance</div><div class="portfolio-stat-value">${formatUSD(state.balance)}</div></div><div class="portfolio-stat"><div class="portfolio-stat-label">Open Value</div><div class="portfolio-stat-value">${formatUSD(totalValue)}</div></div><div class="portfolio-stat"><div class="portfolio-stat-label">Total P&L</div><div class="portfolio-stat-value ${totalPnl >= 0 ? 'up' : ''}">${totalPnl >= 0 ? '+' : ''}${formatUSD(totalPnl)}</div></div><div class="portfolio-stat"><div class="portfolio-stat-label">Win Rate</div><div class="portfolio-stat-value">${winRate}%</div></div></div></div>`
+function renderReturnsPage(): string {
+  return `<div class="full-page"><h1 class="page-title">:: Returns & Shipping ::</h1><div class="empty">Returns and shipping policy coming soon.</div></div>`
 }
 
 function renderMarketModal(): string {
@@ -228,27 +207,10 @@ function renderMarketModal(): string {
   return `<div class="modal" id="market-modal"><div class="modal-box"><div class="modal-head"><span class="modal-title">:: Select Market ::</span><button class="modal-close" id="modal-close">×</button></div><div class="modal-filters">${filters.map(f => `<button class="modal-filter ${state.marketFilter === f ? 'active' : ''}" data-filter="${f}">${f.charAt(0).toUpperCase() + f.slice(1)}</button>`).join('')}</div><div class="modal-list">${filtered.map(m => `<div class="modal-option ${m.id === state.selectedMarket ? 'selected' : ''}" data-id="${m.id}"><div class="modal-option-info"><span class="modal-option-asset">${m.asset}</span><span class="modal-option-q">${m.question}</span></div><div class="modal-option-prices"><span class="price-yes">${(m.yesPrice * 100).toFixed(0)}¢</span><span class="price-no">${(m.noPrice * 100).toFixed(0)}¢</span></div></div>`).join('')}</div></div></div>`
 }
 
-function getConnectionIndicatorClass(): string {
-  switch (state.connectionState) {
-    case 'CONNECTED': return 'state-connected'
-    case 'DEGRADED': return 'state-degraded'
-    case 'UNSTABLE': return 'state-unstable'
-    case 'DISCONNECTED': return 'state-disconnected'
-  }
-}
-
-function getConnectionLabel(): string {
-  switch (state.connectionState) {
-    case 'CONNECTED': return ''
-    case 'DEGRADED': return 'Slow'
-    case 'UNSTABLE': return 'Unstable'
-    case 'DISCONNECTED': return connectionMonitor.getFormattedLastUpdate()
-  }
-}
-
 function renderConnectionIndicator(): string {
-  const stateClass = getConnectionIndicatorClass()
-  const label = getConnectionLabel()
+  const s = state.connectionState
+  const stateClass = s === 'CONNECTED' ? 'state-connected' : s === 'DEGRADED' ? 'state-degraded' : 'state-disconnected'
+  const label = s === 'CONNECTED' ? '' : s === 'DEGRADED' ? '' : connectionMonitor.getFormattedLastUpdate()
 
   return `
     <div class="connection-indicator ${stateClass}" id="connection-indicator">
@@ -258,82 +220,37 @@ function renderConnectionIndicator(): string {
   `
 }
 
-function formatProbeName(name: string): string {
-  const names: Record<string, string> = {
-    priceFeed: 'Price Feed',
-    webSocket: 'WebSocket',
-    serverHealth: 'Server',
-    exchangeHealth: 'Exchange',
-    browser: 'Browser',
-  }
-  return names[name] || name
-}
-
-function formatEventDescription(event: { type: string; data: Record<string, unknown> }): string {
-  switch (event.type) {
-    case 'state_change':
-      return `${event.data.previous || 'Init'} → ${event.data.current}`
-    case 'error':
-      return `Error: ${event.data.probe} - ${event.data.error || event.data.reason || 'unknown'}`
-    case 'anomaly':
-      return `Anomaly: ${event.data.pattern}`
-    case 'reconnect':
-      return event.data.success ? 'Reconnected' : 'Reconnect failed'
-    default:
-      return event.type
-  }
-}
-
 function renderDiagnosticPanel(): string {
   if (!state.showDiagnosticPanel) return ''
 
-  const reports = connectionMonitor.getAllProbeReports()
-  const confidence = connectionMonitor.getConfidence()
+  const status = connectionMonitor.getStatus()
   const history = connectionMonitor.getHistory(10)
-  const serverStats = connectionMonitor.getLatencyStats('serverHealth')
-  const exchangeStats = connectionMonitor.getLatencyStats('exchangeHealth')
-
-  const probeRows = reports.map(r => {
-    const statusClass = `probe-${r.status}`
-    const latencyStr = r.latency ? `${r.latency}ms` : ''
-    return `
-      <div class="probe-row">
-        <span class="probe-name">${formatProbeName(r.name)}</span>
-        <span class="probe-status ${statusClass}">${r.status}</span>
-        <span class="probe-latency">${latencyStr}</span>
-        <span class="probe-message">${r.message || ''}</span>
-      </div>
-    `
-  }).join('')
 
   const historyRows = history.slice().reverse().map(e => {
     const time = new Date(e.timestamp).toLocaleTimeString()
-    const desc = formatEventDescription(e)
+    let desc = e.type
+    if (e.type === 'state_change') desc = `${e.data.previous || 'Init'} → ${e.data.current}`
+    else if (e.type === 'health_check') desc = `Health: ${e.data.status} (${e.data.latency}ms)`
+    else if (e.type === 'error') desc = `Failed (${e.data.consecutiveFailures}x)`
     return `<div class="history-item"><span class="history-time">${time}</span><span class="history-event">${desc}</span></div>`
   }).join('')
 
   return `
     <div class="diagnostic-panel" id="diagnostic-panel">
       <div class="diagnostic-header">
-        <span class="diagnostic-title">Connection Status</span>
+        <span class="diagnostic-title">Connection</span>
         <button class="diagnostic-close" id="diagnostic-close">×</button>
       </div>
       <div class="diagnostic-overview">
         <div class="overall-state state-${state.connectionState.toLowerCase()}">${state.connectionState}</div>
-        <div class="confidence-label">Confidence: ${confidence}</div>
-        <div class="last-update">Last update: ${connectionMonitor.getFormattedLastUpdate()}</div>
+        <div class="last-update">Last check: ${connectionMonitor.getFormattedLastUpdate()}</div>
       </div>
       <div class="diagnostic-section">
-        <div class="diagnostic-section-title">Probes</div>
-        <div class="probe-list">${probeRows}</div>
+        <div class="diagnostic-section-title">Server</div>
+        <div class="latency-row"><span>Latency:</span><span>${status.lastLatency > 0 ? `${status.lastLatency}ms` : '—'}</span></div>
+        <div class="latency-row"><span>Average:</span><span>${status.avgLatency > 0 ? `${status.avgLatency}ms` : '—'}</span></div>
+        <div class="latency-row"><span>Browser:</span><span>${status.online ? 'Online' : 'Offline'}</span></div>
       </div>
-      ${serverStats || exchangeStats ? `
-        <div class="diagnostic-section">
-          <div class="diagnostic-section-title">Latency</div>
-          ${serverStats ? `<div class="latency-row"><span>Server:</span><span>${serverStats.current}ms (avg ${serverStats.mean}ms, ${serverStats.trend})</span></div>` : ''}
-          ${exchangeStats ? `<div class="latency-row"><span>Exchange:</span><span>${exchangeStats.current}ms (avg ${exchangeStats.mean}ms, ${exchangeStats.trend})</span></div>` : ''}
-        </div>
-      ` : ''}
       <div class="diagnostic-section">
         <div class="diagnostic-section-title">Recent Events</div>
         <div class="history-list">${historyRows || '<div class="history-empty">No events yet</div>'}</div>

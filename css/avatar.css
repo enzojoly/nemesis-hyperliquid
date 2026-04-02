@@ -1,32 +1,30 @@
 .avatar-area {
   position: absolute;
-  left: 2%;
+  left: 0;
   bottom: 0;
-  width: 38%;
+  width: 50%;
   height: calc(100% - 48px);
   display: flex;
   align-items: flex-end;
   justify-content: center;
   pointer-events: none;
   transition: opacity 0.4s ease;
+  overflow: visible;
 }
 
-.avatar-area.mode-small,
-.avatar-area.mode-off {
+.avatar-area.mode-small {
   opacity: 0;
   pointer-events: none;
 }
 
-.avatar-area.mode-small .avatar-img,
-.avatar-area.mode-off .avatar-img {
+.avatar-area.mode-small .avatar-img {
   pointer-events: none;
   cursor: default;
 }
 
 .avatar-img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
+  height: 100%;
+  width: auto;
   object-position: bottom center;
   filter: drop-shadow(0 0 30px rgba(80, 160, 220, 0.3));
   transition: opacity 0.3s ease;

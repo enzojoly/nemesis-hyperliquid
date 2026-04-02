@@ -163,7 +163,7 @@ Bun.serve({
     const url = new URL(req.url)
     const path = url.pathname
 
-    if (DEBUG) console.log(`${req.method} ${path}`)
+    if (DEBUG && path !== "/health") console.log(`${req.method} ${path}`)
 
     // HMR SSE endpoint
     if (path === "/__hmr") {
@@ -197,7 +197,7 @@ Bun.serve({
     if (path === "/app.js") {
       const js = cachedBundle ?? await bundleApp()
       return new Response(js, {
-        headers: { "Content-Type": "application/javascript", "Cache-Control": "no-store" },
+        headers: { "Content-Type": "application/javascript" },
       })
     }
 
@@ -205,7 +205,7 @@ Bun.serve({
     const staticAsset = staticAssets.get(path)
     if (staticAsset) {
       return new Response(Bun.file(staticAsset.filePath), {
-        headers: { "Content-Type": staticAsset.contentType, "Cache-Control": "no-store" },
+        headers: { "Content-Type": staticAsset.contentType },
       })
     }
 
@@ -215,12 +215,12 @@ Bun.serve({
       let html = await file.text()
       html = html.replace("</body>", `${HMR_SCRIPT}</body>`)
       return new Response(html, {
-        headers: { "Content-Type": "text/html", "Cache-Control": "no-store" },
+        headers: { "Content-Type": "text/html" },
       })
     }
 
     // Static files (no-store in dev — soft refresh always fresh)
-    const staticResponse = await serveStaticFile(path, true)
+    const staticResponse = await serveStaticFile(path)
     if (staticResponse) return staticResponse
 
     // SPA fallback

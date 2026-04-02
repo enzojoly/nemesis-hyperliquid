@@ -169,5 +169,5 @@ export function showRandomDialogue(category: keyof typeof DIALOGUE) {
     line = randomFrom(filtered)
   }
   state.lastDialogueByCategory[category] = line.text
-  showDialogue({ ...line, showName: true }, true)
+  showDialogue({ ...line, showName: true })
 }

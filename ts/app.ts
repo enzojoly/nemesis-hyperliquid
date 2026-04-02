@@ -3,19 +3,14 @@ import { render } from './render'
 import { setupDelegatedEvents } from './events'
 import { showRandomDialogue } from './signal'
 import { connectionMonitor } from './connection'
-import type { ConnectionState, AnomalyPattern } from './connection'
+import type { ConnectionState } from './connection'
 
 function initConnectionMonitor() {
   connectionMonitor.init()
 
   connectionMonitor.on('stateChange', (event: { previous: ConnectionState; current: ConnectionState }) => {
-    const now = Date.now()
-    const timeSinceLast = now - state.lastConnectionDialogue
-
-    if (timeSinceLast < 5000 && event.current !== 'DISCONNECTED') return
-
     state.connectionState = event.current
-    state.lastConnectionDialogue = now
+    state.lastConnectionDialogue = Date.now()
 
     if (state.scene !== 'main' || !state.introComplete) {
       render()
@@ -27,9 +22,6 @@ function initConnectionMonitor() {
         if (event.previous === 'CONNECTED') {
           showRandomDialogue('connectionDegraded')
         }
-        break
-      case 'UNSTABLE':
-        showRandomDialogue('connectionUnstable')
         break
       case 'DISCONNECTED':
         showRandomDialogue('connectionLost')
@@ -44,37 +36,28 @@ function initConnectionMonitor() {
     render()
   })
 
-  connectionMonitor.on('anomalyDetected', (event: { pattern: AnomalyPattern }) => {
-    if (state.scene !== 'main' || !state.introComplete) return
-
-    const now = Date.now()
-    if (now - state.lastConnectionDialogue < 10000) return
-    state.lastConnectionDialogue = now
-
-    switch (event.pattern) {
-      case 'oscillation':
-        showRandomDialogue('connectionOscillating')
-        break
-      case 'partial_outage':
-        showRandomDialogue('exchangeDown')
-        break
-    }
-  })
-
-  connectionMonitor.on('probeUpdate', () => {
+  connectionMonitor.on('healthCheck', () => {
     if (state.showDiagnosticPanel) {
       render()
     }
   })
 }
 
+function initServiceWorker() {
+  if (!('serviceWorker' in navigator)) return
+
+  navigator.serviceWorker.register('/sw.js')
+    .then((reg) => console.log('[SW] Registered, scope:', reg.scope))
+    .catch((err) => console.warn('[SW] Registration failed:', err))
+}
+
 function init() {
   initData()
+  initServiceWorker()
   initConnectionMonitor()
   setupDelegatedEvents()
   render()
   console.log('NEMESIS initialized')
-  console.log('Every trader needs a Nemesis.')
 }
 
 init()

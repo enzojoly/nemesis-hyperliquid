@@ -8,7 +8,7 @@ export const state: AppState = {
   connected: false,
   address: '',
   balance: 1250.00,
-  nav: 'trade',
+  nav: 'shop',
   orderTab: 'yes',
   posTab: 'positions',
   selectedMarket: '',

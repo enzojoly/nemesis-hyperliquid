@@ -1,8 +1,8 @@
 export type Scene = 'title' | 'main'
-export type NavTab = 'trade' | 'feed' | 'leaderboard' | 'portfolio'
+export type NavTab = 'archive' | 'shop' | 'returns'
 export type OrderTab = 'yes' | 'no' | 'lobby' | 'duel'
 export type PosTab = 'positions' | 'orders' | 'history'
-export type AvatarMode = 'full' | 'small' | 'off'
+export type AvatarMode = 'full' | 'small'
 export type Emotion = 'happy' | 'kawaii' | 'pleased' | 'sly' | 'concerned' | 'inquisitive' | 'talkative' | 'excited' | 'loss'
 export type DialogueSignal = 'off' | 'connecting' | 'connected' | 'disconnecting'
 
@@ -98,4 +98,4 @@ export interface AppState {
   lastConnectionDialogue: number
 }
 
-export type ConnectionState = 'CONNECTED' | 'DEGRADED' | 'UNSTABLE' | 'DISCONNECTED'
+export type ConnectionState = 'CONNECTED' | 'DEGRADED' | 'DISCONNECTED'

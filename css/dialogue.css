@@ -26,9 +26,12 @@
   flex-direction: column;
   justify-content: center;
   padding: 24px 32px;
-  padding-left: 90px;
   cursor: pointer;
   transform-origin: center center;
+}
+
+.dialogue-container.avatar-small .dialogue-box {
+  padding-left: 100px;
 }
 
 .dialogue-box.signal-off {
@@ -135,7 +138,7 @@
 
 .dialogue-portrait {
   position: absolute;
-  left: -15%;
+  left: -80px;
   top: 10%;
   transform: translateY(-50%);
   width: 160px;

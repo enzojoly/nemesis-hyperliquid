@@ -71,16 +71,6 @@ function handleDialogueClick() {
   if (state.scene !== 'main') return
   clearDismissTimer()
 
-  if (state.avatarMode === 'off') {
-    if (state.isTyping) {
-      skipTypewriter()
-    } else if (state.dialogueAtEnd && state.dialogueSignal === 'connected') {
-      disconnectSignal()
-    }
-    playSound([500])
-    return
-  }
-
   if (state.isTyping) {
     skipTypewriter()
   } else {
@@ -105,13 +95,7 @@ function handlePortraitClick() {
     return
   }
 
-  if (state.avatarMode === 'off') {
-    if (state.dialogueAtEnd && state.dialogueSignal === 'connected') {
-      disconnectSignal()
-    }
-  } else {
-    showRandomDialogue('idle')
-  }
+  showRandomDialogue('idle')
   playSound([500])
 }
 
@@ -190,19 +174,8 @@ export function setupDelegatedEvents() {
     if (modeBtn) {
       const mode = modeBtn.dataset.mode as AvatarMode
       if (state.avatarMode !== mode) {
-        const prevMode = state.avatarMode
         state.avatarMode = mode
         playSound([500])
-
-        if (mode === 'off' && prevMode !== 'off') {
-          disconnectSignal()
-        }
-        else if (mode !== 'off' && prevMode === 'off') {
-          connectSignal(() => {
-            showRandomDialogue('idle')
-          })
-        }
-
         render()
       }
       return
