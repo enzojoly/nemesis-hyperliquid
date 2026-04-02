@@ -1,23 +1,5 @@
-@media (max-width: 900px) {
-  .avatar-area {
-    width: 30%;
-    left: 0;
-  }
-
-  .panels-container { right: 12px; left: 12px; width: auto; }
-
-  .dialogue-container { width: 90%; left: 50%; }
-  .dialogue-box { padding-left: 32px; }
-
-  .header { padding: 0 12px; flex-wrap: wrap; height: auto; min-height: 48px; gap: 8px; }
-
-  .full-page { padding: 12px; }
-  .title-logo { font-size: 48px; letter-spacing: 8px; }
-  .connection-indicator { bottom: 12px; left: 12px; padding: 6px 10px; }
-  .diagnostic-panel { width: calc(100% - 24px); left: 12px; bottom: 60px; }
-}
-
-@media (max-width: 600px) {
+@media (max-width: 1024px) {
+  /* Toolbar — stacked, from mobile mode */
   .header {
     flex-wrap: wrap;
     height: auto;
@@ -28,7 +10,6 @@
   .logo { order: 1; }
   .header-spacer { display: none; }
   .mode-toggle { order: 2; margin-left: auto; }
-  .wallet-btn { order: 3; display: none; }
 
   .nav {
     order: 4;
@@ -49,6 +30,10 @@
 
   .logo-text { font-size: 15px; letter-spacing: 2px; }
 
+  /* Panels — full width */
+  .panels-container { right: 12px; left: 12px; width: auto; }
+
+  /* Avatar full mode — centered, behind panels */
   .avatar-area {
     left: 0;
     right: 0;
@@ -57,50 +42,19 @@
     z-index: 5;
   }
 
-  .panels-container {
-    right: 8px;
-    left: 8px;
-    top: 8px;
-    z-index: 10;
-  }
-
+  /* Dialogue — centered with enough left margin for portrait */
   .dialogue-container {
-    width: 94%;
     left: 50%;
-    bottom: 16px;
-    height: 120px;
+    width: calc(100% - 200px);
   }
 
-  .dialogue-box { padding: 16px 20px; }
-  .dialogue-container.avatar-small .dialogue-box { padding-left: 80px; }
-  .dialogue-text { font-size: 13px; line-height: 1.5; min-height: 36px; }
-  .dialogue-name { font-size: 12px; margin-bottom: 6px; }
-  .dialogue-continue { bottom: 10px; right: 16px; }
+  /* Pages / panels */
+  .full-page { padding: 12px; }
+  .title-logo { font-size: 48px; letter-spacing: 8px; }
 
-  .dialogue-portrait {
-    left: 8px;
-    width: 120px;
-    height: 120px;
-    top: 10%;
-  }
-
-  .title-logo { font-size: 36px; letter-spacing: 6px; }
-  .title-tagline { font-size: 13px; letter-spacing: 2px; margin-bottom: 40px; }
-  .title-start { font-size: 12px; letter-spacing: 2px; }
-
-  .full-page { padding: 8px; }
-
-  .panel-body { padding: 8px; }
-  .market-btn { padding: 10px; }
-  .order-tabs { grid-template-columns: repeat(2, 1fr); }
-
-  .connection-indicator { bottom: 8px; left: 8px; }
-  .diagnostic-panel {
-    width: calc(100% - 16px);
-    left: 8px;
-    bottom: 50px;
-    max-height: 60vh;
-  }
+  /* Connection */
+  .connection-indicator { bottom: 12px; left: 12px; padding: 6px 10px; }
+  .diagnostic-panel { width: calc(100% - 24px); left: 12px; bottom: 60px; }
 
   .modal-box { width: calc(100% - 24px); }
 }
